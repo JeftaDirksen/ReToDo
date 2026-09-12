@@ -13,6 +13,7 @@ require 'mailer.php';
 // Create & connect SQLite database
 $db = new SQLite3(DATA_DIR . 'retodo.db');
 $db->exec('CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT)');
+$db->exec('CREATE TABLE IF NOT EXISTS user (email TEXT PRIMARY KEY, token TEXT)');
 
 // Db version 1
 $db_version = $db->querySingle("SELECT value FROM config WHERE key = 'db_version'");
@@ -61,27 +62,76 @@ elseif (time() - $_SESSION['created'] > 24 * 60 * 60) {
 // Handle POST requests
 if (isset($_POST['action'])) {
     if ($_POST['action'] === 'login') {
+        // Remember the email in a cookie for future logins
         setcookie('email', $_POST['email'], time() + (360 * 24 * 60 * 60), '/');
-        $login_link = SCHEME . '://' . HOST . '/?token=xyz';
+
+        // Generate a token and store it in the database
+        $token = bin2hex(random_bytes(16));
+        $stmt = $db->prepare("INSERT OR REPLACE INTO user (email, token) VALUES (:email, :token)");
+        $stmt->bindValue(':email', $_POST['email'], SQLITE3_TEXT);
+        $stmt->bindValue(':token', $token, SQLITE3_TEXT);
+        $stmt->execute();
+
+        // Generate and send the login link via email
+        $login_link = SCHEME . '://' . HOST . '/?token=' . $token;
         send_email($_POST['email'], 'ReToDo login link', 'Click here to login: <a href="' . $login_link . '">Login</a>');
-        die('Not implemented yet');
+        header('Location: /?link_sent');
+        exit;
     }
 }
-session_write_close();
 
 // Content for the page
 $content = '';
-if (isset($_GET['login'])) {
+
+// Login form
+if (isset($_GET['login']) && !isset($_SESSION['email'])) {
     $email = $_COOKIE['email'] ?? '';
     $content = '<form method="POST">
         <input type="hidden" name="action" value="login">
         <input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required>
         <button type="submit">Send login link</button>
         </form>';
-} else {
-    $content = '<a href="?login">Login</a>';
 }
 
+// Handle token login
+elseif (isset($_GET['token'])) {
+    $token = $_GET['token'];
+    $stmt = $db->prepare("SELECT email FROM user WHERE token = :token AND token IS NOT NULL AND token != ''");
+    $stmt->bindValue(':token', $token, SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $user = $result->fetchArray(SQLITE3_ASSOC);
+    if ($user) {
+        $_SESSION['email'] = $user['email'];
+        header('Location: /');
+        exit;
+    } else {
+        $content = 'Invalid token.';
+    }
+}
+
+// Logout
+elseif (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: /');
+    exit;
+}
+
+// Not logged in, show login link
+elseif (!isset($_SESSION['email'])) {
+    if (isset($_GET['link_sent'])) {
+        $content = '<font color="green">A login link has been sent to your email, check your inbox and click the link to log in.</font><br><br>';
+        $content .= '<a href="/">Continue</a>';
+    } else {
+        $content = '<a href="?login">Login</a>';
+    }
+}
+
+// Logged in, show user email and logout link
+else {
+    $content = '<a href="?logout">Logout</a>';
+}
+
+session_write_close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
