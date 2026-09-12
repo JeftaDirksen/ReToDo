@@ -59,9 +59,11 @@ elseif (time() - $_SESSION['created'] > 24 * 60 * 60) {
     $_SESSION['created'] = time();
 }
 
-// Handle POST requests
-if (isset($_POST['action'])) {
-    if ($_POST['action'] === 'login') {
+// Handle forms
+if (isset($_POST['form'])) {
+
+    // Handle login form
+    if ($_POST['form'] === 'login') {
         // Remember the email in a cookie for future logins
         setcookie('email', $_POST['email'], time() + (360 * 24 * 60 * 60), '/');
 
@@ -80,21 +82,8 @@ if (isset($_POST['action'])) {
     }
 }
 
-// Content for the page
-$content = '';
-
-// Login form
-if (isset($_GET['login']) && !isset($_SESSION['email'])) {
-    $email = $_COOKIE['email'] ?? '';
-    $content = '<form method="POST">
-        <input type="hidden" name="action" value="login">
-        <input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required>
-        <button type="submit">Send login link</button>
-        </form>';
-}
-
-// Handle token login
-elseif (isset($_GET['token'])) {
+// Handle token login link
+if (isset($_GET['token'])) {
     $token = $_GET['token'];
     $stmt = $db->prepare("SELECT email FROM user WHERE token = :token AND token IS NOT NULL AND token != ''");
     $stmt->bindValue(':token', $token, SQLITE3_TEXT);
@@ -102,18 +91,29 @@ elseif (isset($_GET['token'])) {
     $user = $result->fetchArray(SQLITE3_ASSOC);
     if ($user) {
         $_SESSION['email'] = $user['email'];
-        header('Location: /');
-        exit;
-    } else {
-        $content = 'Invalid token.';
     }
+    header('Location: /');
+    exit;
 }
 
 // Logout
-elseif (isset($_GET['logout'])) {
+if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: /');
     exit;
+}
+
+// Content for the page
+$content = '';
+
+// Login form
+if (isset($_GET['login']) && !isset($_SESSION['email'])) {
+    $email = $_COOKIE['email'] ?? '';
+    $content = '<form method="POST">
+        <input type="hidden" name="form" value="login">
+        <input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required>
+        <button type="submit">Send login link</button>
+        </form>';
 }
 
 // Not logged in, show login link
@@ -126,9 +126,36 @@ elseif (!isset($_SESSION['email'])) {
     }
 }
 
-// Logged in, show user email and logout link
-else {
-    $content = '<a href="?logout">Logout</a>';
+// Logged in
+elseif (isset($_SESSION['email'])) {
+
+    // Add task form
+    if (isset($_GET['add'])) {
+        // Step 1
+        if (!isset($_GET['step'])) {
+            $content = '<form method="GET">
+                <input type="hidden" name="add">
+                <input type="hidden" name="step" value="2">
+                <input type="text" name="task" size="20" placeholder="Task description" required><br>
+                Repeat every <input type="number" name="interval" min="1" value="1" required> 
+                <select name="recurrence">
+                    <option value="daily">day(s)</option>
+                    <option value="weekly">week(s)</option>
+                    <option value="monthly">month(s)</option>
+                    <option value="yearly">year(s)</option>
+                </select><br>
+                <input type="checkbox" name="repeat_after_completion" value="1" checked> Start new interval after last completion<br>
+                Starting from <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
+                <button type="submit">Add Task</button>
+                </form>';
+        } elseif (isset($_GET['step']) && $_GET['step'] === '2') {
+            // Step 2
+
+        }
+    } else {
+        $content = '<a href="?add">Add</a> ';
+        $content .= '<a href="?logout">Logout</a><br><br>';
+    }
 }
 
 session_write_close();
