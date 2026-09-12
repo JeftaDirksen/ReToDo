@@ -23,6 +23,7 @@ $db->exec('CREATE TABLE IF NOT EXISTS task (
     recurrence TEXT,
     repeat_after_completion BOOLEAN,
     start_date DATE,
+    complete_within INTEGER,
     last_completed_date DATE,
     due_date DATE,
     FOREIGN KEY(user_id) REFERENCES user(id)
@@ -95,7 +96,8 @@ if (isset($_POST['form'])) {
 
     // Add task form
     if ($_POST['form'] === 'add_task') {
-        $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, repeat_after_completion, start_date, due_date) VALUES (:user_id, :name, :type, :interval, :recurrence, :repeat_after_completion, :start_date, :due_date)");
+        $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, repeat_after_completion, start_date, complete_within, due_date)
+            VALUES (:user_id, :name, :type, :interval, :recurrence, :repeat_after_completion, :start_date, :complete_within, date(:start_date, '+' || :complete_within || ' days'))");
         $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
         $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
         $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
@@ -103,12 +105,11 @@ if (isset($_POST['form'])) {
         $stmt->bindValue(':recurrence', $_POST['recurrence'] ?? null, SQLITE3_TEXT);
         $stmt->bindValue(':repeat_after_completion', isset($_POST['repeat_after_completion']) ? 1 : 0, SQLITE3_INTEGER);
         $stmt->bindValue(':start_date', $_POST['start_date'], SQLITE3_TEXT);
-        $stmt->bindValue(':due_date', $_POST['start_date'], SQLITE3_TEXT);
+        $stmt->bindValue(':complete_within', $_POST['complete_within'] ?? 1, SQLITE3_INTEGER);
         $stmt->execute();
         header('Location: /');
         exit;
     }
-
 }
 
 // Handle token login link
@@ -134,6 +135,41 @@ if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: /');
     exit;
+}
+
+// Handle secure actions
+if (isset($_SESSION['user_id'])) {
+
+    // Complete task
+    if (isset($_GET['complete'])) {
+        $task_id = $_GET['complete'];
+        $stmt = $db->prepare("SELECT id, repeat_after_completion FROM task WHERE id = :id AND user_id = :user_id");
+        $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
+        $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $task = $result->fetchArray(SQLITE3_ASSOC);
+        if ($task) {
+            if ($task['repeat_after_completion']) {
+                $stmt = $db->prepare("UPDATE task
+                    SET last_completed_date = date('now'),
+                    start_date = date('now', '+' || interval || ' ' || recurrence),
+                    due_date = date(date('now', '+' || interval || ' ' || recurrence), '+' || complete_within || ' days')
+                    WHERE id = :id");
+                $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
+                $stmt->execute();
+            } else {
+                $stmt = $db->prepare("UPDATE task
+                    SET last_completed_date = date('now'),
+                    start_date = date(start_date, '+' || interval || ' ' || recurrence),
+                    due_date = date(date(start_date, '+' || interval || ' ' || recurrence), '+' || complete_within || ' days')
+                    WHERE id = :id");
+                $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
+                $stmt->execute();
+            }
+        }
+        header('Location: /');
+        exit;
+    }
 }
 
 // Content for the page
@@ -185,11 +221,12 @@ elseif (isset($_SESSION['user_id'])) {
                 <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
                 Repeat every <input type="number" name="interval" min="1" value="1" required> 
                 <select name="recurrence">
-                    <option value="daily">day(s)</option>
-                    <option value="weekly">week(s)</option>
-                    <option value="monthly">month(s)</option>
+                    <option value="days">day(s)</option>
+                    <option value="weeks">week(s)</option>
+                    <option value="months">month(s)</option>
                 </select><br>
-                <input type="checkbox" name="repeat_after_completion" value="1" checked> Start new interval after last completion<br>
+                <input type="checkbox" name="repeat_after_completion" value="1" checked> Start new interval from last completion date (otherwise from last start date)<br>
+                Needs to be completed within <input type="number" name="complete_within" min="1" value="1" required> day(s)<br>
                 Starting from <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
                 <button type="submit">Add Task</button>
                 </form>';
@@ -199,23 +236,35 @@ elseif (isset($_SESSION['user_id'])) {
         $content .= '<a href="?logout">Logout</a><br><br>';
 
         // List tasks
-        $stmt = $db->prepare("SELECT *, strftime('%J', due_date) - strftime('%J', date('now')) AS due_in FROM task WHERE user_id = :user_id ORDER BY due_in ASC");
+        $stmt = $db->prepare("SELECT id, name, start_date, due_date,
+            strftime('%J', start_date) - strftime('%J', date('now')) AS start_in,
+            strftime('%J', due_date) - strftime('%J', date('now')) AS due_in
+            FROM task
+            WHERE user_id = :user_id
+            ORDER BY due_in ASC");
         $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
         $result = $stmt->execute();
-        $content .= '<table border="1" cellpadding="5" cellspacing="0">';
-        $content .= '<tr><th>Name</th><th>Type</th><th>Interval</th><th>Recurrence</th><th>Repeat After Completion</th><th>Start Date</th><th>Last Completed Date</th><th>Due Date</th><th>Due In</th></tr>';
+        $content .= '<table border="0" cellpadding="5" cellspacing="0">';
+        $content .= '<tr><th>Complete</th><th>Start</th><th>Time left</th><th>Name</th></tr>';
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            // Start
+            if ($row['start_in'] <= 0) {
+                $start = "Now";
+            } else {
+                $start = "In {$row['start_in']} day(s)";
+            }
+            // Time left
+            if ($row['due_in'] < 0) {
+                $time_left = abs($row['due_in']) . " day(s) overdue";
+            } else {
+                $time_left = $row['due_in'] . " day(s) left";
+            }
             $content .= '<tr>';
-            $content .= '<td>' . htmlspecialchars($row['name']) . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['type']) . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['interval']) . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['recurrence']) . '</td>';
-            $content .= '<td>' . ($row['repeat_after_completion'] ? 'Yes' : 'No') . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['start_date']) . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['last_completed_date'] ?? '') . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['due_date'] ?? '') . '</td>';
-            $content .= '<td>' . htmlspecialchars($row['due_in']) . '</td>';
-            $content .= '</tr>';
+            $content .= '<td><a href="?complete=' . $row['id'] . '">&#9989;</a></td>';
+            $content .= "<td>$start</td>";
+            $content .= "<td>$time_left</td>";
+            $content .= "<td>{$row['name']}</td>";
+            $content .= "</tr>";
         }
         $content .= '</table>';
     }
