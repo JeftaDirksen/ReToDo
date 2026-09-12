@@ -13,7 +13,20 @@ require 'mailer.php';
 // Create & connect SQLite database
 $db = new SQLite3(DATA_DIR . 'retodo.db');
 $db->exec('CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT)');
-$db->exec('CREATE TABLE IF NOT EXISTS user (email TEXT PRIMARY KEY, token TEXT)');
+$db->exec('CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY, email TEXT UNIQUE COLLATE NOCASE, token TEXT)');
+$db->exec('CREATE TABLE IF NOT EXISTS task (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    name TEXT,
+    type TEXT,
+    interval INTEGER,
+    recurrence TEXT,
+    repeat_after_completion BOOLEAN,
+    start_date DATE,
+    last_completed_date DATE,
+    due_date DATE,
+    FOREIGN KEY(user_id) REFERENCES user(id)
+    )');
 
 // Db version 1
 $db_version = $db->querySingle("SELECT value FROM config WHERE key = 'db_version'");
@@ -26,13 +39,6 @@ if (!$db_version) {
 if ($db_version === '1') {
     //$db->exec("UPDATE config SET value = '2' WHERE key = 'db_version'");
     //$db_version = '2';
-}
-
-// Add salt to config if not already present
-$result = $db->query("SELECT value FROM config WHERE key = 'salt'");
-if ($result->fetchArray() === false) {
-    $salt = bin2hex(random_bytes(16));
-    $db->exec("INSERT INTO config (key, value) VALUES ('salt', '$salt')");
 }
 
 // Get config from database
@@ -62,7 +68,7 @@ elseif (time() - $_SESSION['created'] > 24 * 60 * 60) {
 // Handle forms
 if (isset($_POST['form'])) {
 
-    // Handle login form
+    // Login form
     if ($_POST['form'] === 'login') {
         // Remember the email in a cookie for future logins
         setcookie('email', $_POST['email'], time() + (360 * 24 * 60 * 60), '/');
@@ -80,17 +86,44 @@ if (isset($_POST['form'])) {
         header('Location: /?link_sent');
         exit;
     }
+
+    // Handle secure forms
+    if (!isset($_SESSION['user_id'])) {
+        header('HTTP/1.1 403 Forbidden');
+        die('Unauthorized');
+    }
+
+    // Add task form
+    if ($_POST['form'] === 'add_task') {
+        $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, repeat_after_completion, start_date, due_date) VALUES (:user_id, :name, :type, :interval, :recurrence, :repeat_after_completion, :start_date, :due_date)");
+        $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+        $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
+        $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
+        $stmt->bindValue(':interval', $_POST['interval'] ?? null, SQLITE3_INTEGER);
+        $stmt->bindValue(':recurrence', $_POST['recurrence'] ?? null, SQLITE3_TEXT);
+        $stmt->bindValue(':repeat_after_completion', isset($_POST['repeat_after_completion']) ? 1 : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':start_date', $_POST['start_date'], SQLITE3_TEXT);
+        $stmt->bindValue(':due_date', $_POST['start_date'], SQLITE3_TEXT);
+        $stmt->execute();
+        header('Location: /');
+        exit;
+    }
+
 }
 
 // Handle token login link
 if (isset($_GET['token'])) {
     $token = $_GET['token'];
-    $stmt = $db->prepare("SELECT email FROM user WHERE token = :token AND token IS NOT NULL AND token != ''");
+    $stmt = $db->prepare("SELECT id FROM user WHERE token = :token AND token IS NOT NULL AND token != ''");
     $stmt->bindValue(':token', $token, SQLITE3_TEXT);
     $result = $stmt->execute();
     $user = $result->fetchArray(SQLITE3_ASSOC);
     if ($user) {
-        $_SESSION['email'] = $user['email'];
+        $_SESSION['user_id'] = $user['id'];
+        // Clear the token after successful login
+        $stmt = $db->prepare("UPDATE user SET token = NULL WHERE id = :id");
+        $stmt->bindValue(':id', $user['id'], SQLITE3_INTEGER);
+        $stmt->execute();
     }
     header('Location: /');
     exit;
@@ -107,7 +140,7 @@ if (isset($_GET['logout'])) {
 $content = '';
 
 // Login form
-if (isset($_GET['login']) && !isset($_SESSION['email'])) {
+if (isset($_GET['login']) && !isset($_SESSION['user_id'])) {
     $email = $_COOKIE['email'] ?? '';
     $content = '<form method="POST">
         <input type="hidden" name="form" value="login">
@@ -117,7 +150,7 @@ if (isset($_GET['login']) && !isset($_SESSION['email'])) {
 }
 
 // Not logged in, show login link
-elseif (!isset($_SESSION['email'])) {
+elseif (!isset($_SESSION['user_id'])) {
     if (isset($_GET['link_sent'])) {
         $content = '<font color="green">A login link has been sent to your email, check your inbox and click the link to log in.</font><br><br>';
         $content .= '<a href="/">Continue</a>';
@@ -127,7 +160,7 @@ elseif (!isset($_SESSION['email'])) {
 }
 
 // Logged in
-elseif (isset($_SESSION['email'])) {
+elseif (isset($_SESSION['user_id'])) {
 
     // Add task form
     if (isset($_GET['add'])) {
@@ -135,7 +168,7 @@ elseif (isset($_SESSION['email'])) {
         if (!isset($_GET['type'])) {
             $content = '<form method="GET">
                 <input type="hidden" name="add">
-                <input type="text" name="task" size="20" placeholder="Task description" required><br>
+                <input type="text" name="name" size="20" placeholder="Task description" required><br>
                 <select name="type">
                     <option value="static_interval">Repeat every # days/weeks/months</option>
                     <option value="day_number">Repeat on every #th of the month</option>
@@ -147,9 +180,9 @@ elseif (isset($_SESSION['email'])) {
         // Static interval type
         elseif (isset($_GET['type']) && $_GET['type'] === 'static_interval') {
             $content = '<form method="POST">
-                <input type="hidden" name="add">
+                <input type="hidden" name="form" value="add_task">
                 <input type="hidden" name="type" value="static_interval">
-                <input type="text" name="task" size="20" value="' . $_GET['task'] . '" required readonly><br>
+                <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
                 Repeat every <input type="number" name="interval" min="1" value="1" required> 
                 <select name="recurrence">
                     <option value="daily">day(s)</option>
@@ -164,6 +197,27 @@ elseif (isset($_SESSION['email'])) {
     } else {
         $content = '<a href="?add">Add</a> ';
         $content .= '<a href="?logout">Logout</a><br><br>';
+
+        // List tasks
+        $stmt = $db->prepare("SELECT *, strftime('%J', due_date) - strftime('%J', date('now')) AS due_in FROM task WHERE user_id = :user_id ORDER BY due_in ASC");
+        $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $content .= '<table border="1" cellpadding="5" cellspacing="0">';
+        $content .= '<tr><th>Name</th><th>Type</th><th>Interval</th><th>Recurrence</th><th>Repeat After Completion</th><th>Start Date</th><th>Last Completed Date</th><th>Due Date</th><th>Due In</th></tr>';
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $content .= '<tr>';
+            $content .= '<td>' . htmlspecialchars($row['name']) . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['type']) . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['interval']) . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['recurrence']) . '</td>';
+            $content .= '<td>' . ($row['repeat_after_completion'] ? 'Yes' : 'No') . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['start_date']) . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['last_completed_date'] ?? '') . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['due_date'] ?? '') . '</td>';
+            $content .= '<td>' . htmlspecialchars($row['due_in']) . '</td>';
+            $content .= '</tr>';
+        }
+        $content .= '</table>';
     }
 }
 
