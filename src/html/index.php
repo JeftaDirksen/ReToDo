@@ -131,26 +131,35 @@ elseif (isset($_SESSION['email'])) {
 
     // Add task form
     if (isset($_GET['add'])) {
-        // Step 1
-        if (!isset($_GET['step'])) {
+        // Type
+        if (!isset($_GET['type'])) {
             $content = '<form method="GET">
                 <input type="hidden" name="add">
-                <input type="hidden" name="step" value="2">
                 <input type="text" name="task" size="20" placeholder="Task description" required><br>
+                <select name="type">
+                    <option value="static_interval">Repeat every # days/weeks/months</option>
+                    <option value="day_number">Repeat on every #th of the month</option>
+                    <option value="day_of_month">Repeat every #th ...day of the month</option>
+                </select><br>
+                <button type="submit">Next</button>';
+        }
+
+        // Static interval type
+        elseif (isset($_GET['type']) && $_GET['type'] === 'static_interval') {
+            $content = '<form method="POST">
+                <input type="hidden" name="add">
+                <input type="hidden" name="type" value="static_interval">
+                <input type="text" name="task" size="20" value="' . $_GET['task'] . '" required readonly><br>
                 Repeat every <input type="number" name="interval" min="1" value="1" required> 
                 <select name="recurrence">
                     <option value="daily">day(s)</option>
                     <option value="weekly">week(s)</option>
                     <option value="monthly">month(s)</option>
-                    <option value="yearly">year(s)</option>
                 </select><br>
                 <input type="checkbox" name="repeat_after_completion" value="1" checked> Start new interval after last completion<br>
                 Starting from <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
                 <button type="submit">Add Task</button>
                 </form>';
-        } elseif (isset($_GET['step']) && $_GET['step'] === '2') {
-            // Step 2
-
         }
     } else {
         $content = '<a href="?add">Add</a> ';
