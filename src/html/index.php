@@ -5,7 +5,6 @@ ini_set('include_path', '..');
 define('SCHEME', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME']);
 define('HOST', $_SERVER['HTTP_HOST']);
 define('DATA_DIR', '/data/');
-define('CURRENT_TIMESTAMP', time());
 define('CURRENT_FORMATTED_DATETIME', (new DateTime())->format(DateTime::ATOM));
 
 // Create & connect SQLite database
@@ -37,6 +36,23 @@ $r = $db->query("SELECT * FROM config");
 $config = [];
 while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
     $config[$row['key']] = $row['value'];
+}
+
+// Start session
+$session_days = 30; // 30 days session lifetime
+$sessions_dir = DATA_DIR . 'sessions';
+if (!is_dir($sessions_dir)) mkdir($sessions_dir, 0700, true);
+session_save_path($sessions_dir);
+ini_set('session.gc_maxlifetime', $session_days * 24 * 60 * 60);
+session_set_cookie_params($session_days * 24 * 60 * 60);
+session_start();
+if (!isset($_SESSION['created'])) {
+    $_SESSION['created'] = time();
+}
+// Regenerate session every 10% of the session lifetime
+elseif (time() - $_SESSION['created'] > 0.1 * $session_days * 24 * 60 * 60) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
 }
 
 // Handle POST requests
