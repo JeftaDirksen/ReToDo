@@ -57,7 +57,10 @@ elseif (time() - $_SESSION['created'] > 0.1 * $session_days * 24 * 60 * 60) {
 
 // Handle POST requests
 if (isset($_POST['action'])) {
-    die('Not implemented yet ' . $_POST['email']);
+    if ($_POST['action'] === 'login') {
+        setcookie('email', $_POST['email'], time() + (360 * 24 * 60 * 60), '/');
+        die('Not implemented yet');
+    }
 }
 
 // Content for the page
@@ -65,8 +68,8 @@ $content = '';
 if (isset($_GET['login'])) {
     $content = '<form method="POST">';
     $content .= '<input type="hidden" name="action" value="login">';
-    $content .= '<label for="email">Email</label> ';
-    $content .= '<input type="email" id="email" name="email" required> ';
+    $email = $_COOKIE['email'] ?? '';
+    $content .= '<input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required> ';
     $content .= '<button type="submit">Send login link</button>';
     $content .= '</form>';
 } else {
