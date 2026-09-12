@@ -2,10 +2,10 @@
 
 // Init
 ini_set('include_path', '..');
-define('SCHEME', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME']);
-define('HOST', $_SERVER['HTTP_HOST']);
 define('DATA_DIR', '/data/');
-define('CURRENT_FORMATTED_DATETIME', (new DateTime())->format(DateTime::ATOM));
+//define('SCHEME', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME']);
+//define('HOST', $_SERVER['HTTP_HOST']);
+//define('CURRENT_FORMATTED_DATETIME', (new DateTime())->format(DateTime::ATOM));
 
 // Create & connect SQLite database
 $db = new SQLite3(DATA_DIR . 'retodo.db');
@@ -20,8 +20,8 @@ if (!$db_version) {
 
 // Db update v2
 if ($db_version === '1') {
-    #$db->exec("UPDATE config SET value = '2' WHERE key = 'db_version'");
-    #$db_version = '2';
+    //$db->exec("UPDATE config SET value = '2' WHERE key = 'db_version'");
+    //$db_version = '2';
 }
 
 // Add salt to config if not already present
@@ -49,8 +49,8 @@ session_start();
 if (!isset($_SESSION['created'])) {
     $_SESSION['created'] = time();
 }
-// Regenerate session every 10% of the session lifetime
-elseif (time() - $_SESSION['created'] > 0.1 * $session_days * 24 * 60 * 60) {
+// Regenerate session ID if it's older than 24 hours
+elseif (time() - $_SESSION['created'] > 24 * 60 * 60) {
     session_regenerate_id(true);
     $_SESSION['created'] = time();
 }
@@ -62,16 +62,17 @@ if (isset($_POST['action'])) {
         die('Not implemented yet');
     }
 }
+session_write_close();
 
 // Content for the page
 $content = '';
 if (isset($_GET['login'])) {
-    $content = '<form method="POST">';
-    $content .= '<input type="hidden" name="action" value="login">';
     $email = $_COOKIE['email'] ?? '';
-    $content .= '<input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required> ';
-    $content .= '<button type="submit">Send login link</button>';
-    $content .= '</form>';
+    $content = '<form method="POST">
+        <input type="hidden" name="action" value="login">
+        <input type="email" name="email" value="' . $email . '" size="20" placeholder="Email" required>
+        <button type="submit">Send login link</button>
+        </form>';
 } else {
     $content = '<a href="?login">Login</a>';
 }
