@@ -3,9 +3,12 @@
 // Init
 ini_set('include_path', '..');
 define('DATA_DIR', '/data/');
-//define('SCHEME', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME']);
-//define('HOST', $_SERVER['HTTP_HOST']);
+define('SCHEME', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME']);
+define('HOST', $_SERVER['HTTP_HOST']);
 //define('CURRENT_FORMATTED_DATETIME', (new DateTime())->format(DateTime::ATOM));
+
+// Requires
+require 'mailer.php';
 
 // Create & connect SQLite database
 $db = new SQLite3(DATA_DIR . 'retodo.db');
@@ -59,6 +62,8 @@ elseif (time() - $_SESSION['created'] > 24 * 60 * 60) {
 if (isset($_POST['action'])) {
     if ($_POST['action'] === 'login') {
         setcookie('email', $_POST['email'], time() + (360 * 24 * 60 * 60), '/');
+        $login_link = SCHEME . '://' . HOST . '/?token=xyz';
+        send_email($_POST['email'], 'ReToDo login link', 'Click here to login: <a href="' . $login_link . '">Login</a>');
         die('Not implemented yet');
     }
 }

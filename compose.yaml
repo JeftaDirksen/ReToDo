@@ -2,6 +2,11 @@ services:
   retodo:
     container_name: retodo
     build: .
+    environment:
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-your_email@example.com}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-your_password}
     ports:
       - "${PORT:-8080}:80"
     volumes:
