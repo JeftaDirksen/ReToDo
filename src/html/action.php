@@ -53,17 +53,39 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Add task
-if (isset($_POST['type'])) {
-    $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, repeat_after_completion, start_date, complete_within, due_date)
-        VALUES (:user_id, :name, :type, :interval, :recurrence, :repeat_after_completion, :start_date, :complete_within, date(:start_date, '+' || :complete_within || ' days'))");
+
+// Day interval type
+if (@$_POST['type'] === 'day_interval') {
+    $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, completion_based, start_date, due_within, due_date)
+        VALUES (:user_id, :name, :type, :interval, :recurrence, :completion_based, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))");
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
     $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
     $stmt->bindValue(':interval', $_POST['interval'] ?? null, SQLITE3_INTEGER);
     $stmt->bindValue(':recurrence', $_POST['recurrence'] ?? null, SQLITE3_TEXT);
-    $stmt->bindValue(':repeat_after_completion', isset($_POST['repeat_after_completion']) ? 1 : 0, SQLITE3_INTEGER);
+    $stmt->bindValue(':completion_based', isset($_POST['completion_based']) ? 1 : 0, SQLITE3_INTEGER);
     $stmt->bindValue(':start_date', $_POST['start_date'], SQLITE3_TEXT);
-    $stmt->bindValue(':complete_within', $_POST['complete_within'] ?? 1, SQLITE3_INTEGER);
+    $stmt->bindValue(':due_within', $_POST['due_within'] ?? 1, SQLITE3_INTEGER);
+    $stmt->execute();
+    redirect('/');
+}
+
+// Date interval type
+if (@$_POST['type'] === 'date_interval') {
+    // Set start date to be in the future and in a selected month
+    $start_date = $_POST['start_date'];
+    $selected_months = $_POST['months'] ?? [];
+    while ($start_date < date('Y-m-d') || !in_array(date('n', strtotime($start_date)), $selected_months)) {
+        $start_date = date('Y-m-d', strtotime($start_date . ' +1 month'));
+    }
+    $stmt = $db->prepare("INSERT INTO task (user_id, name, type, months, start_date, due_within, due_date)
+        VALUES (:user_id, :name, :type, :months, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))");
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
+    $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
+    $stmt->bindValue(':months', implode(',', $selected_months), SQLITE3_TEXT);
+    $stmt->bindValue(':start_date', $start_date, SQLITE3_TEXT);
+    $stmt->bindValue(':due_within', $_POST['due_within'] ?? 1, SQLITE3_INTEGER);
     $stmt->execute();
     redirect('/');
 }
@@ -71,26 +93,24 @@ if (isset($_POST['type'])) {
 // Complete task
 if (isset($_GET['complete'])) {
     $task_id = $_GET['complete'];
-    $stmt = $db->prepare("SELECT id, repeat_after_completion FROM task WHERE id = :id AND user_id = :user_id");
+    $stmt = $db->prepare("SELECT id, completion_based FROM task WHERE id = :id AND user_id = :user_id");
     $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $result = $stmt->execute();
     $task = $result->fetchArray(SQLITE3_ASSOC);
     if ($task) {
-        if ($task['repeat_after_completion']) {
+        if ($task['completion_based']) {
             $stmt = $db->prepare("UPDATE task
-                SET last_completed_date = date('now'),
-                start_date = date('now', '+' || interval || ' ' || recurrence),
-                due_date = date(date('now', '+' || interval || ' ' || recurrence), '+' || complete_within || ' days'),
+                SET start_date = date('now', '+' || interval || ' ' || recurrence),
+                due_date = date('now', '+' || interval || ' ' || recurrence, '+' || due_within || ' days'),
                 updated = CURRENT_TIMESTAMP
                 WHERE id = :id");
             $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
             $stmt->execute();
         } else {
             $stmt = $db->prepare("UPDATE task
-                SET last_completed_date = date('now'),
-                start_date = date(start_date, '+' || interval || ' ' || recurrence),
-                due_date = date(date(start_date, '+' || interval || ' ' || recurrence), '+' || complete_within || ' days'),
+                SET start_date = date(start_date, '+' || interval || ' ' || recurrence),
+                due_date = date(start_date, '+' || interval || ' ' || recurrence, '+' || due_within || ' days'),
                 updated = CURRENT_TIMESTAMP
                 WHERE id = :id");
             $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);

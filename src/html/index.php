@@ -24,21 +24,22 @@ elseif (!isset($_SESSION['user_id'])) {
 }
 
 // Add task form
-elseif (isset($_GET['add']) && !isset($_GET['type'])) {
+elseif (isset($_GET['add'])) {
     $content = '<form method="GET">
         <input type="text" name="name" size="20" placeholder="Task description" required><br>
         <select name="type">
-            <option value="static_interval">Repeat every # days/weeks/months</option>
-            <option value="day_number">Repeat on every #th of the month</option>
-            <option value="day_of_month">Repeat every #th ...day of the month</option>
+            <option value="day_interval">Repeat with daily intervals</option>
+            <option value="date_interval">Repeat in months on specific dates</option>
+            <option value="week_interval">Repeat on specific weekdays</option>
+            <option value="weekday_interval">Repeat every #th weekday of the month</option>
         </select><br>
         <button type="submit">Next</button>';
 }
 
-// Static interval type
-elseif (@$_GET['type'] === 'static_interval') {
+// Day interval type
+elseif (@$_GET['type'] === 'day_interval') {
     $content = '<form method="POST" action="action.php">
-        <input type="hidden" name="type" value="static_interval">
+        <input type="hidden" name="type" value="day_interval">
         <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
         Repeat every <input type="number" name="interval" min="1" value="1" required> 
         <select name="recurrence">
@@ -46,9 +47,35 @@ elseif (@$_GET['type'] === 'static_interval') {
             <option value="weeks">week(s)</option>
             <option value="months">month(s)</option>
         </select><br>
-        <input type="checkbox" name="repeat_after_completion" value="1" checked> Start new interval from last completion date (otherwise from last start date)<br>
-        Needs to be completed within <input type="number" name="complete_within" min="1" value="1" required> day(s)<br>
+        <input type="checkbox" name="completion_based" value="1" checked> New start date based on completion date (otherwise on start date)<br>
+        Due within <input type="number" name="due_within" min="1" value="1" required> day(s)<br>
         Starting from <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
+        <button type="submit">Add Task</button>
+        </form>';
+}
+
+// Date interval type
+elseif (@$_GET['type'] === 'date_interval') {
+    $content = '<form method="POST" action="action.php">
+        <input type="hidden" name="type" value="date_interval">
+        <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
+        Starting date <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
+        Repeat on months:<br>
+        <select name="months[]" multiple size="12" required>
+            <option value="1" selected>January</option>
+            <option value="2" selected>February</option>
+            <option value="3" selected>March</option>
+            <option value="4" selected>April</option>
+            <option value="5" selected>May</option>
+            <option value="6" selected>June</option>
+            <option value="7" selected>July</option>
+            <option value="8" selected>August</option>
+            <option value="9" selected>September</option>
+            <option value="10" selected>October</option>
+            <option value="11" selected>November</option>
+            <option value="12" selected>December</option>
+        </select><br>
+        Due within <input type="number" name="due_within" min="1" value="1" required> day(s)<br>
         <button type="submit">Add Task</button>
         </form>';
 }
