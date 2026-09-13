@@ -30,8 +30,8 @@ elseif (isset($_GET['add'])) {
         <select name="type">
             <option value="day_interval">Repeat with daily intervals</option>
             <option value="date_interval">Repeat in months on specific dates</option>
-            <option value="week_interval">Repeat on specific weekdays</option>
-            <option value="weekday_interval">Repeat every #th weekday of the month</option>
+            <option value="week_interval" disabled>Repeat on specific weekdays</option>
+            <option value="weekday_interval" disabled>Repeat every #th weekday of the month</option>
         </select><br>
         <button type="submit">Next</button>';
 }
@@ -95,7 +95,7 @@ else {
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $result = $stmt->execute();
     $content .= '<table border="0" cellpadding="5" cellspacing="0">
-            <tr><th>Complete</th><th>Start</th><th>Time left</th><th>Name</th></tr>';
+            <tr><th>Complete</th><th>Name</th><th>Start</th><th>Time left</th></tr>';
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         // Start
         if ($row['start_in'] <= 0) {
@@ -111,9 +111,9 @@ else {
         }
         $content .= '<tr>
             <td><a href="action.php?complete=' . $row['id'] . '">&#9989;</a></td>
+            <td>' . $row['name'] . '</td>
             <td>' . $start . '</td>
             <td>' . $time_left . '</td>
-            <td>' . $row['name'] . '</td>
             </tr>';
     }
     $content .= '</table>';
