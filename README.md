@@ -6,15 +6,31 @@ ReToDo is a small web application for managing recurring tasks. It runs as a PHP
 
 - Docker Engine
 - Docker Compose v2
-- PHPMailer
+- unzip
 
-## Download PHPMailer
+## Setup
 
 ```sh
+# Download ReToDo
+git clone https://github.com/JeftaDirksen/ReToDo.git retodo
+cd retodo
+
+# Download/extract PHPMailer
 wget https://github.com/PHPMailer/PHPMailer/archive/master.zip
 unzip master.zip -d src
 mv src/PHPMailer-master src/PHPMailer
 rm master.zip
+
+# Configure
+echo PORT=8080 >> .env
+echo SMTP_HOST= > .env
+echo SMTP_PORT= >> .env
+echo SMTP_USERNAME= >> .env
+echo SMTP_PASSWORD= >> .env
+nano .env
+
+# Build/start
+docker compose up -d --build
 ```
 
 ## Run with Docker Compose
