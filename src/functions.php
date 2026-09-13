@@ -7,7 +7,7 @@ require 'PHPMailer/src/Exception.php';
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 
-function send_email($to, $subject, $body) {
+function send_email(string $to, string $subject, string $body) {
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -29,4 +29,9 @@ function send_email($to, $subject, $body) {
         print("Mailer Error: {$mail->ErrorInfo}");
         return false;
     }
+}
+
+function redirect(string $url = '/') {
+    header('Location: ' . $url);
+    exit;
 }
