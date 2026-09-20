@@ -2,7 +2,7 @@ const badgeEndpoint = 'badge.php';
 
 async function updateBadge() {
     try {
-        if (!('setAppBadge' in navigator) || !('clearAppBadge' in navigator)) {
+        if (!('setAppBadge' in navigator)) {
             return;
         }
 
@@ -12,14 +12,16 @@ async function updateBadge() {
         });
 
         if (!response.ok) {
-            await navigator.clearAppBadge();
+            if ('clearAppBadge' in navigator) {
+                await navigator.clearAppBadge();
+            }
             return;
         }
 
         const data = await response.json();
         if (data.count > 0) {
             await navigator.setAppBadge(data.count);
-        } else {
+        } else if ('clearAppBadge' in navigator) {
             await navigator.clearAppBadge();
         }
     } catch (error) {

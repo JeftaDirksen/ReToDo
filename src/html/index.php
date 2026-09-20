@@ -212,18 +212,44 @@ if (isset($_SESSION['user_id'])) {
     <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
     <script>
+        async function updateAppBadge() {
+            if (!('setAppBadge' in navigator)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('badge.php', {cache: 'no-store'});
+                if (!response.ok) {
+                    if ('clearAppBadge' in navigator) {
+                        await navigator.clearAppBadge();
+                    }
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.count > 0) {
+                    await navigator.setAppBadge(data.count);
+                } else if ('clearAppBadge' in navigator) {
+                    await navigator.clearAppBadge();
+                }
+            } catch (error) {
+                // Badge updates are best effort.
+            }
+        }
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
-                navigator.serviceWorker.register('sw.js', {
-                    scope: './'
+                navigator.serviceWorker.register('sw.js', {scope: './'}).then(function() {
+                    updateAppBadge();
                 });
             });
 
             document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible' && navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({
-                        type: 'update-badge'
-                    });
+                if (document.visibilityState === 'visible') {
+                    updateAppBadge();
+                    if (navigator.serviceWorker.controller) {
+                        navigator.serviceWorker.controller.postMessage({type: 'update-badge'});
+                    }
                 }
             });
         }
