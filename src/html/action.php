@@ -96,9 +96,8 @@ if (@$_POST['type'] === 'date_interval') {
 
 // Complete task
 if (isset($_GET['complete'])) {
-    $task_id = $_GET['complete'];
     $stmt = $db->prepare("SELECT * FROM task WHERE id = :id AND user_id = :user_id");
-    $stmt->bindValue(':id', $task_id, SQLITE3_INTEGER);
+    $stmt->bindValue(':id', $_GET['complete'], SQLITE3_INTEGER);
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $result = $stmt->execute();
     $task = $result->fetchArray(SQLITE3_ASSOC);
@@ -148,5 +147,13 @@ if (isset($_GET['complete'])) {
             $stmt->execute();
         }
     }
+    redirect('/');
+}
+
+if (isset($_GET['delete'])) {
+    $stmt = $db->prepare("DELETE FROM task WHERE id = :id AND user_id = :user_id");
+    $stmt->bindValue(':id', $_GET['delete'], SQLITE3_INTEGER);
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $stmt->execute();
     redirect('/');
 }

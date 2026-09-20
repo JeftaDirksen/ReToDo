@@ -4,6 +4,7 @@ require '../init.php';
 
 $menu = [];
 $content = '';
+$row = [];
 
 // Menu item 'Back' on subscreens
 if (isset($_GET['add']) || isset($_GET['task']) || isset($_GET['type'])) {
@@ -61,7 +62,6 @@ elseif (isset($_GET['add'])) {
 
 // Add/Edit day_interval
 elseif (@$_GET['type'] === 'day_interval') {
-    $row = [];
     $button = 'Add Task';
 
     // Edit mode
@@ -102,7 +102,6 @@ elseif (@$_GET['type'] === 'day_interval') {
 
 // Add/Edit date_interval
 elseif (@$_GET['type'] === 'date_interval') {
-    $row = [];
     $button = 'Add Task';
 
     // Edit mode
@@ -184,6 +183,15 @@ else {
     $content .= '</table>';
 }
 
+// 'Delete' when editing a task
+if (isset($_GET['edit'])) {
+    $menu[] = sprintf(
+        '<a href="action.php?delete=%d" onclick="return confirm(\'Delete task \\\'%s\\\'?\');">Delete</a>',
+        $_GET['edit'],
+        $row['name']
+    );
+}
+
 // 'Logout' when logged in
 if (isset($_SESSION['user_id'])) {
     $menu[] = '<a href="action.php?logout" onclick="return confirm(\'Logout?\');">Logout</a>';
@@ -208,7 +216,7 @@ if (isset($_SESSION['user_id'])) {
 <body>
     <h1>ReToDo</h1>
     <p>Welcome to ReToDo! This is a simple web application for managing your recurring tasks.</p>
-    <p><?php echo implode(' ', $menu); ?></p>
+    <p><?php echo implode(' &nbsp; ', $menu); ?></p>
     <p><?php echo $content; ?></p>
 </body>
 
