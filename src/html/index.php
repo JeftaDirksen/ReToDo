@@ -86,7 +86,7 @@ elseif (@$_GET['type'] === 'day_interval') {
     $content = '<form method="POST" action="action.php">
         <input type="hidden" name="type" value="day_interval">
         <input type="hidden" name="edit" value="' . $edit . '">
-        <input type="text" name="name" size="20" value="' . $name . '" required readonly><br>
+        <input type="text" name="name" size="20" value="' . $name . '" required><br>
         Repeat every <input type="number" name="interval" min="1" value="' . $interval . '" required> 
         <select name="recurrence">
             <option value="days"' . ($recurrence === 'days' ? ' selected' : '') . '>day(s)</option>
@@ -125,7 +125,7 @@ elseif (@$_GET['type'] === 'date_interval') {
     $content = '<form method="POST" action="action.php">
         <input type="hidden" name="type" value="date_interval">
         <input type="hidden" name="edit" value="' . $edit . '">
-        <input type="text" name="name" size="20" value="' . $name . '" required readonly><br>
+        <input type="text" name="name" size="20" value="' . $name . '" required><br>
         Starting date <input type="date" name="start_date" value="' . $start_date . '" required><br>
         Repeat on months:<br>
         <select name="months[]" multiple size="12" required>
@@ -186,7 +186,7 @@ else {
 
 // 'Logout' when logged in
 if (isset($_SESSION['user_id'])) {
-    $menu[] = '<a href="action.php?logout">Logout</a>';
+    $menu[] = '<a href="action.php?logout" onclick="return confirm(\'Logout?\');">Logout</a>';
 }
 
 ?>

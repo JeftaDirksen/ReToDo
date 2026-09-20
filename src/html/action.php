@@ -52,12 +52,14 @@ if (!isset($_SESSION['user_id'])) {
     die('Unauthorized');
 }
 
-// Add task
+// Add/edit task
 
-// Day interval type
+// Add/edit day_interval
 if (@$_POST['type'] === 'day_interval') {
-    $stmt = $db->prepare("INSERT INTO task (user_id, name, type, interval, recurrence, completion_based, start_date, due_within, due_date)
-        VALUES (:user_id, :name, :type, :interval, :recurrence, :completion_based, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))");
+    $stmt = $db->prepare("INSERT INTO task (id, user_id, name, type, interval, recurrence, completion_based, start_date, due_within, due_date)
+        VALUES (:id, :user_id, :name, :type, :interval, :recurrence, :completion_based, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))
+        ON CONFLICT(id) DO UPDATE SET name = :name, interval = :interval, recurrence = :recurrence, completion_based = :completion_based, start_date = :start_date, due_within = :due_within, due_date = date(:start_date, '+' || :due_within || ' days') WHERE id = :id AND user_id = :user_id");
+    $stmt->bindValue(':id', empty($_POST['edit']) ? null : $_POST['edit'], SQLITE3_INTEGER);
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
     $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
@@ -70,16 +72,18 @@ if (@$_POST['type'] === 'day_interval') {
     redirect('/');
 }
 
-// Date interval type
+// Add/edit date_interval
 if (@$_POST['type'] === 'date_interval') {
-    // Set start date to be in the future and in a selected month
+    // Make sure start date is in a selected month
     $start_date = $_POST['start_date'];
     $selected_months = $_POST['months'] ?? [];
-    while ($start_date < date('Y-m-d') || !in_array(date('n', strtotime($start_date)), $selected_months)) {
+    while (!in_array(date('n', strtotime($start_date)), $selected_months)) {
         $start_date = date('Y-m-d', strtotime($start_date . ' +1 month'));
     }
-    $stmt = $db->prepare("INSERT INTO task (user_id, name, type, selection, start_date, due_within, due_date)
-        VALUES (:user_id, :name, :type, :selection, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))");
+    $stmt = $db->prepare("INSERT INTO task (id, user_id, name, type, selection, start_date, due_within, due_date)
+        VALUES (:id, :user_id, :name, :type, :selection, :start_date, :due_within, date(:start_date, '+' || :due_within || ' days'))
+        ON CONFLICT(id) DO UPDATE SET name = :name, selection = :selection, start_date = :start_date, due_within = :due_within, due_date = date(:start_date, '+' || :due_within || ' days') WHERE id = :id AND user_id = :user_id");
+    $stmt->bindValue(':id', empty($_POST['edit']) ? null : $_POST['edit'], SQLITE3_INTEGER);
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $stmt->bindValue(':name', $_POST['name'], SQLITE3_TEXT);
     $stmt->bindValue(':type', $_POST['type'], SQLITE3_TEXT);
