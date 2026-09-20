@@ -211,6 +211,23 @@ if (isset($_SESSION['user_id'])) {
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('sw.js', {
+                    scope: './'
+                });
+            });
+
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({
+                        type: 'update-badge'
+                    });
+                }
+            });
+        }
+    </script>
 </head>
 
 <body>
