@@ -2,7 +2,13 @@
 
 require '../init.php';
 
+$menu = [];
 $content = '';
+
+// Menu item 'Back' on subscreens
+if (isset($_GET['add']) || isset($_GET['task']) || isset($_GET['type'])) {
+    $menu[] = '<a href="javascript:history.back()">Back</a>';
+}
 
 // Login form
 if (isset($_GET['login']) && !isset($_SESSION['user_id'])) {
@@ -19,7 +25,24 @@ elseif (!isset($_SESSION['user_id'])) {
         $content = '<font color="green">A login link has been sent to your email, check your inbox and click the link to log in.</font>
             <br><br><a href="/">Continue</a>';
     } else {
-        $content = '<a href="?login">Login</a>';
+        $menu[] = '<a href="?login">Login</a>';
+    }
+}
+
+// Show task
+elseif (isset($_GET['task'])) {
+    $stmt = $db->prepare("SELECT * FROM task WHERE id = :id AND user_id = :user_id");
+    $stmt->bindValue(':id', $_GET['task'], SQLITE3_INTEGER);
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $result = $stmt->execute();
+    if ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $menu[] = sprintf('<a href="?edit=%s&type=%s">Edit</a>', $_GET['task'], $row['type']);
+        $content = '<h2>Task: ' . htmlspecialchars($row['name']) . '</h2>';
+        $content .= '<p>Type: ' . htmlspecialchars($row['type']) . '</p>';
+        $content .= '<p>Start date: ' . htmlspecialchars($row['start_date']) . '</p>';
+        $content .= '<p>Due date: ' . htmlspecialchars($row['due_date']) . '</p>';
+    } else {
+        $content = '<font color="red">Task not found.</font>';
     }
 }
 
@@ -36,55 +59,97 @@ elseif (isset($_GET['add'])) {
         <button type="submit">Next</button>';
 }
 
-// Day interval type
+// Add/Edit day_interval
 elseif (@$_GET['type'] === 'day_interval') {
+    $row = [];
+    $button = 'Add Task';
+
+    // Edit mode
+    if (isset($_GET['edit'])) {
+        $stmt = $db->prepare("SELECT * FROM task WHERE id = :id AND user_id = :user_id");
+        $stmt->bindValue(':id', $_GET['edit'], SQLITE3_INTEGER);
+        $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if (!$row) die('Task not found');
+        $button = 'Update Task';
+    }
+    // Values/defaults
+    $edit = $row['id'] ?? '';
+    $name = $row['name'] ?? $_GET['name'] ?? '';
+    $interval = $row['interval'] ?? 1;
+    $recurrence = $row['recurrence'] ?? 'days';
+    $completion_based = $row['completion_based'] ?? 1;
+    $due_within = $row['due_within'] ?? 1;
+    $start_date = $row['start_date'] ?? date('Y-m-d');
+
     $content = '<form method="POST" action="action.php">
         <input type="hidden" name="type" value="day_interval">
-        <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
-        Repeat every <input type="number" name="interval" min="1" value="1" required> 
+        <input type="hidden" name="edit" value="' . $edit . '">
+        <input type="text" name="name" size="20" value="' . $name . '" required readonly><br>
+        Repeat every <input type="number" name="interval" min="1" value="' . $interval . '" required> 
         <select name="recurrence">
-            <option value="days">day(s)</option>
-            <option value="weeks">week(s)</option>
-            <option value="months">month(s)</option>
+            <option value="days"' . ($recurrence === 'days' ? ' selected' : '') . '>day(s)</option>
+            <option value="weeks"' . ($recurrence === 'weeks' ? ' selected' : '') . '>week(s)</option>
+            <option value="months"' . ($recurrence === 'months' ? ' selected' : '') . '>month(s)</option>
         </select><br>
-        <input type="checkbox" name="completion_based" value="1" checked> New start date based on completion date (otherwise on start date)<br>
-        Due within <input type="number" name="due_within" min="1" value="1" required> day(s)<br>
-        Starting from <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
-        <button type="submit">Add Task</button>
+        <input type="checkbox" name="completion_based" value="1"' . ($completion_based ? ' checked' : '') . '> New start date based on completion date (otherwise on start date)<br>
+        Due within <input type="number" name="due_within" min="1" value="' . $due_within . '" required> day(s)<br>
+        Starting from <input type="date" name="start_date" value="' . $start_date . '" required><br>
+        <button type="submit">' . $button . '</button>
         </form>';
 }
 
-// Date interval type
+// Add/Edit date_interval
 elseif (@$_GET['type'] === 'date_interval') {
+    $row = [];
+    $button = 'Add Task';
+
+    // Edit mode
+    if (isset($_GET['edit'])) {
+        $stmt = $db->prepare("SELECT * FROM task WHERE id = :id AND user_id = :user_id");
+        $stmt->bindValue(':id', $_GET['edit'], SQLITE3_INTEGER);
+        $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if (!$row) die('Task not found');
+        $button = 'Update Task';
+    }
+    // Values/defaults
+    $edit = $row['id'] ?? '';
+    $name = $row['name'] ?? $_GET['name'] ?? '';
+    $start_date = $row['start_date'] ?? date('Y-m-d');
+    $selection = explode(',', $row['selection'] ?? '1,2,3,4,5,6,7,8,9,10,11,12');
+    $due_within = $row['due_within'] ?? 1;
+
     $content = '<form method="POST" action="action.php">
         <input type="hidden" name="type" value="date_interval">
-        <input type="text" name="name" size="20" value="' . $_GET['name'] . '" required readonly><br>
-        Starting date <input type="date" name="start_date" value="' . date('Y-m-d') . '" required><br>
+        <input type="hidden" name="edit" value="' . $edit . '">
+        <input type="text" name="name" size="20" value="' . $name . '" required readonly><br>
+        Starting date <input type="date" name="start_date" value="' . $start_date . '" required><br>
         Repeat on months:<br>
         <select name="months[]" multiple size="12" required>
-            <option value="1" selected>January</option>
-            <option value="2" selected>February</option>
-            <option value="3" selected>March</option>
-            <option value="4" selected>April</option>
-            <option value="5" selected>May</option>
-            <option value="6" selected>June</option>
-            <option value="7" selected>July</option>
-            <option value="8" selected>August</option>
-            <option value="9" selected>September</option>
-            <option value="10" selected>October</option>
-            <option value="11" selected>November</option>
-            <option value="12" selected>December</option>
+            <option value="1"' . (in_array('1', $selection) ? ' selected' : '') . '>January</option>
+            <option value="2"' . (in_array('2', $selection) ? ' selected' : '') . '>February</option>
+            <option value="3"' . (in_array('3', $selection) ? ' selected' : '') . '>March</option>
+            <option value="4"' . (in_array('4', $selection) ? ' selected' : '') . '>April</option>
+            <option value="5"' . (in_array('5', $selection) ? ' selected' : '') . '>May</option>
+            <option value="6"' . (in_array('6', $selection) ? ' selected' : '') . '>June</option>
+            <option value="7"' . (in_array('7', $selection) ? ' selected' : '') . '>July</option>
+            <option value="8"' . (in_array('8', $selection) ? ' selected' : '') . '>August</option>
+            <option value="9"' . (in_array('9', $selection) ? ' selected' : '') . '>September</option>
+            <option value="10"' . (in_array('10', $selection) ? ' selected' : '') . '>October</option>
+            <option value="11"' . (in_array('11', $selection) ? ' selected' : '') . '>November</option>
+            <option value="12"' . (in_array('12', $selection) ? ' selected' : '') . '>December</option>
         </select><br>
-        Due within <input type="number" name="due_within" min="1" value="1" required> day(s)<br>
-        <button type="submit">Add Task</button>
+        Due within <input type="number" name="due_within" min="1" value="' . $due_within . '" required> day(s)<br>
+        <button type="submit">' . $button . '</button>
         </form>';
 }
 
 // Tasks list
 else {
-    $content = '<a href="?add">Add</a> ';
-    $content .= '<a href="action.php?logout">Logout</a><br>';
-
+    $menu[] = '<a href="?add">Add</a>';
     // List tasks
     $stmt = $db->prepare("SELECT id, name, start_date, due_date,
         strftime('%J', start_date) - strftime('%J', date('now')) AS start_in,
@@ -94,7 +159,7 @@ else {
         ORDER BY due_in ASC");
     $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
     $result = $stmt->execute();
-    $content .= '<table border="0" cellpadding="5" cellspacing="0">
+    $content = '<table border="0" cellpadding="5" cellspacing="0">
             <tr><th>Complete</th><th>Name</th><th>Start</th><th>Time left</th></tr>';
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         // Start
@@ -111,12 +176,17 @@ else {
         }
         $content .= '<tr>
             <td><a href="action.php?complete=' . $row['id'] . '">&#9989;</a></td>
-            <td>' . $row['name'] . '</td>
+            <td><a href="?task=' . $row['id'] . '">' . $row['name'] . '</a></td>
             <td>' . $start . '</td>
             <td>' . $time_left . '</td>
             </tr>';
     }
     $content .= '</table>';
+}
+
+// 'Logout' when logged in
+if (isset($_SESSION['user_id'])) {
+    $menu[] = '<a href="action.php?logout">Logout</a>';
 }
 
 ?>
@@ -138,6 +208,7 @@ else {
 <body>
     <h1>ReToDo</h1>
     <p>Welcome to ReToDo! This is a simple web application for managing your recurring tasks.</p>
+    <p><?php echo implode(' ', $menu); ?></p>
     <p><?php echo $content; ?></p>
 </body>
 
